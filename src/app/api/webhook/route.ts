@@ -5,19 +5,18 @@ import { createClient } from '@supabase/supabase-js';
 // Using a dummy key as fallback allows Vercel's static build process to pass even if the env variable isn't fully loaded yet.
 const stripe = new Stripe((process.env.STRIPE_SECRET_KEY as string) || 'sk_test_dummy_key_for_build');
 
-// Usamos Service Role para saltar RLS y poder inyectar saldo
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
-
 export async function POST(req: Request) {
+  // Usamos Service Role para saltar RLS y poder inyectar saldo
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy',
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
   const payload = await req.text();
   const signature = req.headers.get('Stripe-Signature');
 
