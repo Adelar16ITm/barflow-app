@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@/utils/supabase/server';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+// Using a dummy key as fallback allows Vercel's static build process to pass even if the env variable isn't fully loaded yet.
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY as string) || 'sk_test_dummy_key_for_build');
 
 export async function POST(req: Request) {
   try {

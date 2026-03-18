@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+// Using a dummy key as fallback allows Vercel's static build process to pass even if the env variable isn't fully loaded yet.
+const stripe = new Stripe((process.env.STRIPE_SECRET_KEY as string) || 'sk_test_dummy_key_for_build');
 
 // Usamos Service Role para saltar RLS y poder inyectar saldo
 const supabaseAdmin = createClient(
