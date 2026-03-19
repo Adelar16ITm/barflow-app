@@ -30,7 +30,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 
 # vercel
@@ -39,9 +39,27 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scripts and temp files (not part of the app)
 seed_drinks.js
 create_stripe_product.js
 check_auth.py
 extract_cookies.py
 test_figma.js
 opencode_copy.json
+temp_ls.txt
+test_vercel_ui.py
+test_api.js
+test_stitch.js
+upload_all.js
+upload_envs.js
+upload_spawn.js
+upload_test.js
+run_migration.js
+out.txt
+push_error.txt
+stitch_help.txt
+stitch_help_ascii.txt
+stitch_proxy_help.txt
+stitch_raw.html
+price_id.txt

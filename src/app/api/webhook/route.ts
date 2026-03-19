@@ -2,14 +2,25 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// Using a dummy key as fallback allows Vercel's static build process to pass even if the env variable isn't fully loaded yet.
-const stripe = new Stripe((process.env.STRIPE_SECRET_KEY as string) || 'sk_test_dummy_key_for_build');
+// Fail fast if env vars are missing at runtime
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(req: Request) {
-  // Usamos Service Role para saltar RLS y poder inyectar saldo
+  // Validate env vars before proceeding
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'Server misconfigured: missing Supabase env vars' }, { status: 500 });
+  }
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'Server misconfigured: missing STRIPE_WEBHOOK_SECRET' }, { status: 500 });
+  }
+
+  // Service Role Client to bypass RLS for wallet updates
   const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy',
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
     {
       auth: {
         autoRefreshToken: false,
@@ -17,39 +28,41 @@ export async function POST(req: Request) {
       }
     }
   );
+
   const payload = await req.text();
   const signature = req.headers.get('Stripe-Signature');
+
+  if (!signature) {
+    return NextResponse.json({ error: 'Missing Stripe-Signature header' }, { status: 400 });
+  }
 
   let event: Stripe.Event;
 
   try {
-    if (!signature || !process.env.STRIPE_WEBHOOK_SECRET) {
-      throw new Error('Falta firma o secreto en env');
-    }
-    
+    // Verify cryptographic signature to prevent fake payment injections
     event = stripe.webhooks.constructEvent(
       payload,
       signature,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err: any) {
-    console.error(`❌ Error de Webhook: ${err.message}`);
+    console.error(`❌ Webhook signature verification failed: ${err.message}`);
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
   }
 
-  // Si el pago es exitoso
+  // Handle successful checkout
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     
-    // Extraemos metadata inyectada en /api/checkout
+    // Extract metadata sealed in /api/checkout
     const userId = session.metadata?.userId;
     const type = session.metadata?.type;
     const tokensGranted = parseInt(session.metadata?.tokens_granted || '10', 10);
 
     if (userId && type === 'token_recharge') {
-      console.log(`💰 Pago de Tokens verificado. Añadiendo ${tokensGranted} tokens para ${userId}`);
+      console.log(`💰 Payment verified. Adding ${tokensGranted} tokens for user ${userId}`);
 
-      // Registrar los tokens a la cuenta del usuario en Supabase
+      // Read current balance
       const { data: currentWallet } = await supabaseAdmin
         .from('wallet_balance')
         .select('balance')
@@ -58,20 +71,23 @@ export async function POST(req: Request) {
         
       const newBalance = (currentWallet?.balance || 0) + tokensGranted;
 
+      // Upsert the new balance
       const { error } = await supabaseAdmin
         .from('wallet_balance')
         .upsert({ 
-            user_id: userId,
-            balance: newBalance,
-            updated_at: new Date().toISOString()
+          user_id: userId,
+          balance: newBalance,
+          updated_at: new Date().toISOString()
         });
 
       if (error) {
-         console.error('❌ Error actualizando wallet_balance en Supabase:', error);
-         return NextResponse.json({ error: 'DB_ERROR' }, { status: 500 });
+        console.error('❌ Error updating wallet_balance in Supabase:', error);
+        return NextResponse.json({ error: 'DB_ERROR' }, { status: 500 });
       }
+
+      console.log(`✅ Wallet updated: user ${userId} now has ${newBalance} tokens`);
     } else {
-      console.warn('⚠️ Webhook recibido pero faltaban datos críticos de tokens en metadata:', session.metadata);
+      console.warn('⚠️ Webhook received but missing critical token metadata:', session.metadata);
     }
   }
 

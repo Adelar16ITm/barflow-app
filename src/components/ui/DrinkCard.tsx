@@ -30,7 +30,7 @@ export const DrinkCard = ({ drink }: { drink: any }) => {
             src={drink.image_url} 
             alt={drink.name} 
             fill 
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            className="w-full h-full object-cover pointer-events-none select-none transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-700 bg-zinc-900">No Image</div>

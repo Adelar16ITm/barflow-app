@@ -9,9 +9,13 @@ export async function POST(req: Request) {
        return NextResponse.json({ error: 'Faltan datos requeridos.' }, { status: 400 });
     }
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({ error: 'Server misconfigured: missing Supabase env vars' }, { status: 500 });
+    }
+
     const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dummy.supabase.co',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || 'dummy_key',
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
       {
         auth: {
           autoRefreshToken: false,

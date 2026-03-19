@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createClient } from '@/utils/supabase/server';
 
-// Using a dummy key as fallback allows Vercel's static build process to pass even if the env variable isn't fully loaded yet.
-const stripe = new Stripe((process.env.STRIPE_SECRET_KEY as string) || 'sk_test_dummy_key_for_build');
+// Fail fast if env vars are missing at runtime
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY is not set in environment variables');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(req: Request) {
   try {
@@ -14,17 +17,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'You must be logged in to buy tokens' }, { status: 401 });
     }
 
+    const priceId = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID;
+    if (!priceId) {
+      return NextResponse.json({ error: 'Server misconfigured: missing STRIPE_PRICE_ID' }, { status: 500 });
+    }
+
+    const hostUrl = new URL(req.url).origin;
+
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'], // 'card' natively enables Apple Pay and Google Pay if the user's device supports it.
+      payment_method_types: ['card'],
       line_items: [
         {
-          price: 'price_1TCSGHQo9kkaOgrkRfgRxgEg', // Recarga de Saldo VIP
+          price: priceId,
           quantity: 1,
         },
       ],
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/bar?payment=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/bar?payment=cancel`,
+      success_url: `${hostUrl}/bar?payment=success`,
+      cancel_url: `${hostUrl}/bar?payment=cancel`,
       metadata: {
         userId: user.id,
         type: 'token_recharge',

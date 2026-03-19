@@ -51,7 +51,7 @@ export default async function DrinkDetailPage({ params }: { params: Promise<{ id
                  src={drink.image_url} 
                  alt={drink.name} 
                  fill 
-                 className="object-cover scale-100 group-hover:scale-105 transition-transform duration-1000 ease-out"
+                 className="object-cover pointer-events-none select-none scale-100 group-hover:scale-105 transition-transform duration-1000 ease-out"
                  priority
                />
             ) : (

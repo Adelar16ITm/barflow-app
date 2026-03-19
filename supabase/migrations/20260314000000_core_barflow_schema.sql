@@ -34,16 +34,23 @@ CREATE TABLE public.drinks (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 3. Tabla de Órdenes / Pedidos (Orders)
--- RLS asegurará que el cantinero vea todas, y el usuario (invitado o no) vea las suyas.
+-- 3. Balance de Tokens / Wallet (wallet_balance)
+-- Registra los tokens disponibles por usuario para ordenar bebidas.
+CREATE TABLE public.wallet_balance (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  balance INTEGER DEFAULT 0 NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 4. Tabla de Órdenes / Pedidos (Orders)
 CREATE TABLE public.orders (
   id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
-  user_id TEXT DEFAULT 'guest_user' NOT NULL, -- Eliminada la Foreign Key estricta para permitir invitados
+  user_id TEXT DEFAULT 'guest_user' NOT NULL,
   drink_id UUID REFERENCES public.drinks(id) ON DELETE SET NULL,
   quantity INTEGER DEFAULT 1 NOT NULL,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'cancelled')),
   total_mxn NUMERIC(10, 2) NOT NULL,
-  stripe_session_id TEXT UNIQUE, -- Trazabilidad con Stripe
+  stripe_session_id TEXT UNIQUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   completed_at TIMESTAMP WITH TIME ZONE
 );
@@ -51,9 +58,10 @@ CREATE TABLE public.orders (
 -- Habilitar STRICT Row-Level Security (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.drinks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wallet_balance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
--- Establecer RLS Policies
+-- === RLS Policies ===
 
 -- Users: Pueden leer y actualizar su PROPIO perfil.
 CREATE POLICY "Users can view their own profile."
@@ -69,10 +77,16 @@ CREATE POLICY "Users can update own profile."
 CREATE POLICY "Anyone can view drinks."
   ON public.drinks FOR SELECT USING (true);
 
--- Orders: Desactivar RLS parcialmente en orders para demo pública o usar Service Role.
--- Dejaremos la inserción abierta para invitados por ahora.
-CREATE POLICY "Anyone can insert orders"
-  ON public.orders FOR INSERT WITH CHECK (true);
+-- Wallet: Los usuarios solo pueden ver su propio saldo.
+CREATE POLICY "Users can view their own wallet"
+  ON public.wallet_balance FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own wallet"
+  ON public.wallet_balance FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Orders: Solo usuarios autenticados pueden insertar órdenes.
+CREATE POLICY "Authenticated users can insert orders"
+  ON public.orders FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 CREATE POLICY "Anyone can view any order for demo"
   ON public.orders FOR SELECT USING (true);
@@ -86,7 +100,8 @@ BEGIN
   
   RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public;
 
 -- Trigger automático al registro
 CREATE TRIGGER on_auth_user_created

@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { RechargeButton } from '@/components/ui/RechargeButton';
-import { DrinkCard } from '@/components/ui/DrinkCard';
+import { DrinkGrid } from '@/components/ui/DrinkGrid';
 
 export default async function BarDashboard() {
   const supabase = await createClient();
@@ -55,20 +55,9 @@ export default async function BarDashboard() {
           </div>
         </header>
 
-        {/* Menu Grid (Glass Cards) */}
-        <main className="max-w-7xl mx-auto px-6 pt-12 animate-slide-up" style={{animationDelay: '0.1s'}}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {drinkList.map((drink: any) => (
-              <DrinkCard key={drink.id} drink={drink} />
-            ))}
-            
-            {drinkList.length === 0 && (
-              <div className="col-span-full py-20 flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-full border-t-2 border-[#00f3ff] animate-spin mb-4"></div>
-                <p className="text-gray-500 font-mono tracking-widest uppercase">La barra está cerrada</p>
-              </div>
-            )}
-          </div>
+        {/* Menu Grid with Search (Interactive Client Component) */}
+        <main className="max-w-7xl mx-auto px-6 pt-10 animate-slide-up" style={{animationDelay: '0.1s'}}>
+           <DrinkGrid drinks={drinkList} />
         </main>
       </div>
 
